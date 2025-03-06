@@ -146,6 +146,7 @@ jobs:
         run: |
           cd kdevops
           ls -ld linux
+          make destroy
           make bringup
 
       - name: Build linux and boot test nodes on test kernel
