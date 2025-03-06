@@ -151,15 +151,18 @@ jobs:
 
           cd kdevops
           make $KDEVOPS_ARGS
+          grep CONFIG_BOOTLINUX_TREE .config
 
       - name: Run kdevops make
         run: |
           cd kdevops
+          grep CONFIG_BOOTLINUX_TREE .config
           make -j$(nproc)
 
       - name: Run kdevops make bringup
         run: |
           cd kdevops
+          grep CONFIG_BOOTLINUX_TREE .config
           ls -ld linux
           make destroy
           make bringup
@@ -167,9 +170,11 @@ jobs:
       - name: Build linux and boot test nodes on test kernel
         run: |
           cd kdevops
+          grep CONFIG_BOOTLINUX_TREE .config
           make linux
 
       - name: Build required ci tests
         run: |
           cd kdevops
+          grep CONFIG_BOOTLINUX_TREE .config
           make ci-build-test

@@ -27,6 +27,7 @@ jobs:
       - name: Run CI tests
         run: |
           cd kdevops
+          grep CONFIG_BOOTLINUX_TREE .config
           make ci-test
 
           echo -e "Kernel tests results:\n" > ci.commit_extra
