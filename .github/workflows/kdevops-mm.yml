@@ -45,6 +45,7 @@ jobs:
       - name: Run CI tests
         run: |
           cd kdevops
+          echo "make uname" > .ci/test/linux
           make ci-test
 
           echo -e "Kernel tests results:\n" > ci.commit_extra
