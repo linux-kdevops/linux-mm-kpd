@@ -42,7 +42,7 @@ jobs:
       - name: Checkout kdevops
         run: |
           rm -rf kdevops
-          git clone /mirror/kdevops.git kdevops
+          git clone --branch ci-repo https://github.com/dkruces/kdevops kdevops
 
       - name: Checkout custom branch with delta on kdevops/linux
         run: |
@@ -157,4 +157,4 @@ jobs:
       - name: Build required ci tests
         run: |
           cd kdevops
-          make ci-build-test
+          CI_REPO="${{ github.repository }}" make ci-build-test
