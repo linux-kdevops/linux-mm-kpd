@@ -51,7 +51,6 @@ jobs:
           cd kdevops
           git clone $LINUX_TREE linux
           cd linux
-          git fetch origin $LINUX_TREE_REF
           git checkout $LINUX_TREE_REF
           git log -1
 

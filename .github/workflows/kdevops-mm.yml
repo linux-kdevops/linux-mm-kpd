@@ -8,6 +8,9 @@
 name: Run generic kdevops CI tests
 
 on:
+  schedule:
+    - cron: '0 14 * * *'
+    # - cron: '*/20 * * * *'
   push:
     branches: ['**']
   pull_request:
@@ -30,11 +33,36 @@ on:
         type: string
 
 jobs:
+  generate_ref:
+    name: Determine kernel_ref value
+    outputs:
+      kernel_ref: ${{ steps.set_kernel_ref.outputs.kernel_ref }}
+      kernel_tree: ${{ steps.set_kernel_ref.outputs.kernel_tree }}
+    runs-on: [self-hosted]
+    steps:
+      - name: Set kernel_ref based on trigger type
+        id: set_kernel_ref
+        run: |
+          current_date=$(date +'%Y%m%d')
+          # current_date=$(date -d "yesterday" +'%Y%m%d')
+          kernel_ref="next-${current_date}"
+          kernel_tree="linux-next"
+          if ! git ls-remote --tags "/mirror/${kernel_tree}.git" "$kernel_ref" | grep --quiet "$kernel_ref"; then
+            echo "Linux kernel ref ${kernel_ref} does not exist. Skipping."
+            kernel_ref="unset"
+          echo "kernel_ref=${kernel_ref}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "kernel_ref=${kernel_ref}" >> "$GITHUB_OUTPUT"
+          echo "kernel_tree=${kernel_tree}" >> "$GITHUB_OUTPUT"
+          echo "DEBUG: kernel_ref=${kernel_ref}, kernel_tree=${kernel_tree}"
+
   setup:
+    needs: generate_ref
+    if: ${{ startsWith(needs.generate_ref.outputs.kernel_ref, 'next-') }}
     uses: ./.github/workflows/kdevops-init.yml
     with:
-      kernel_tree: ${{ inputs.kernel_tree }}
-      kernel_ref: ${{ inputs.kernel_ref }}
+      kernel_ref: ${{ needs.generate_ref.outputs.kernel_ref || 'master' }}
+      kernel_tree: ${{ needs.generate_ref.outputs.kernel_tree || 'linux' }}
     secrets: inherit
 
   run-tests:
