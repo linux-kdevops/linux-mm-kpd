@@ -73,16 +73,81 @@ jobs:
       - name: Run CI tests
         run: |
           cd kdevops
-          CI_REPO="${{ github.repository }}" make ci-test
+          # Run the CI test suite in a clean, isolated background process group.
+          #
+          # - `nohup`: Ensures the test runner continues even if the controlling
+          #             terminal (e.g. the CI shell) ends or gets a SIGHUP.
+          # - `stdbuf -oL`: Forces line-buffered stdout to ensure log output
+          #                 appears in real-time (especially important for
+          #                 CI logs).
+          # - `setsid`: Starts the process in a new session and process group
+          #             so we can later kill the entire test group cleanly
+          #             (including all children like ansible-playbook, ssh,
+          #             etc.) using a single `kill -TERM -- -$PID`.
+          nohup stdbuf -oL bash -c 'setsid CI_REPO="${{ github.repository }}" make ci-test' > ci.log 2>&1 &
+          echo $! > ci.pid
+          CI_PID=$(cat ci.pid)
+          CI_WATCHDOG="scripts/workflows/generic/crash_watchdog.py"
+          while kill -0 $CI_PID 2> /dev/null; do
+            $CI_WATCHDOG || touch .crashed
+            sleep 60
+          done
 
-          echo -e "Kernel tests results:\n" > ci.commit_extra
-          tail -n 1 workflows/selftests/results/last-run/*/*.dmesg.log >> ci.commit_extra
-          echo -e "\n\n" >> ci.commit_extra
-          echo -e "Userspace test results:\n" >> ci.commit_extra
-          tail -n 1 workflows/selftests/results/last-run/*/*.userspace.log >> ci.commit_extra
-          echo -e "\n\n" >> ci.commit_extra
+          if [[ -f .crashed ]]; then
+            if kill -0 $CI_PID 2>/dev/null; then
+              echo "Killing ci-test due to possible crash."
+              echo "Try to end things gracefully sending TERM first..."
+              kill -TERM -- "$CI_PID" 2>/dev/null || true
+              # We want to wait for all processes to end, if we killed
+              # a stalled system or crashed system, the make ci-archive
+              # will run, and this can take some time. 5 minutes should do.
+              sleep $((5*60))
 
-          if grep -i -q "fail" ci.commit_extra ; then
+              # Experience shows by this time, the process would be dead
+              echo "Now we wack all processes sending KILL ..."
+              kill -KILL -- "$CI_PID" 2>/dev/null || true
+              # we are tempted to try to collect logs but if the hosts
+              # are crashed that's futile. Just hope we collected the
+              # crash logs.
+            else
+              echo "ci-test process already exited"
+            fi
+          fi
+
+          # If you crashed you may not have any results collected other
+          # than your kernel crashes.
+          if [[ -d workflows/selftests/results/last-run ]]; then
+            # Check for kernel test logs and add them if they exist
+            KERNEL_LOGS=$(find workflows/selftests/results/last-run -name "*.dmesg.log" 2>/dev/null)
+            if [ -n "$KERNEL_LOGS" ]; then
+              echo -e "Kernel tests results:\n" > ci.commit_extra
+              for log in $KERNEL_LOGS; do
+                if [ -s "$log" ]; then
+                  tail -n 1 "$log" >> ci.commit_extra
+                fi
+              done
+              echo -e "\n\n" >> ci.commit_extra
+            fi
+
+            # Check for userspace test logs and add them if they exist
+            USERSPACE_LOGS=$(find workflows/selftests/results/last-run -name "*.userspace.log" 2>/dev/null)
+            if [ -n "$USERSPACE_LOGS" ]; then
+              echo -e "Userspace test results:\n" >> ci.commit_extra
+              for log in $USERSPACE_LOGS; do
+                if [ -s "$log" ]; then
+                  echo "Results from $log:" >> ci.commit_extra
+                  tail -n 1 "$log" >> ci.commit_extra
+                fi
+              done
+            fi
+          fi
+
+          if [[ -f .crashed ]]; then
+            echo "Generating crash report ..."
+            ./scripts/workflows/generic/crash_report.py >> ci.commit_extra
+          fi
+
+          if grep -i -q "fail" ci.commit_extra || [ -f .crashed ]; then
             echo "fail" > ci.result
           else
             echo "ok" > ci.result
