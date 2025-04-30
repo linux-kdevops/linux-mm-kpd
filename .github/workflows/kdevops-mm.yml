@@ -87,7 +87,7 @@ jobs:
           nohup stdbuf -oL bash -c 'setsid CI_REPO="${{ github.repository }}" make ci-test' > ci.log 2>&1 &
           echo $! > ci.pid
           CI_PID=$(cat ci.pid)
-          CI_WATCHDOG="scripts/workflows/generic/crash_watchdog.py"
+          CI_WATCHDOG="./scripts/workflows/generic/crash_watchdog.py"
           while kill -0 $CI_PID 2> /dev/null; do
             $CI_WATCHDOG || touch .crashed
             sleep 60
