@@ -84,7 +84,7 @@ jobs:
           #             so we can later kill the entire test group cleanly
           #             (including all children like ansible-playbook, ssh,
           #             etc.) using a single `kill -TERM -- -$PID`.
-          nohup stdbuf -oL bash -c 'setsid CI_REPO="${{ github.repository }}" make ci-test' > ci.log 2>&1 &
+          nohup stdbuf -oL bash -c 'setsid CI_WORKFLOW="${{ github.repository }}" make ci-test' > ci.log 2>&1 &
           echo $! > ci.pid
           CI_PID=$(cat ci.pid)
           CI_WATCHDOG="./scripts/workflows/generic/crash_watchdog.py"
